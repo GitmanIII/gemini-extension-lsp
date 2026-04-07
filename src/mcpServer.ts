@@ -5,6 +5,10 @@ import { LspClient } from "./LspClient.js";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
+import { exec } from "node:child_process";
+import { promisify } from "node:util";
+
+const execAsync = promisify(exec);
 
 // --- LspServerManager ---
 interface UserSettings {
@@ -288,6 +292,50 @@ server.tool(
       return {
         content: [{ type: "text", text: `Error: ${err.message}` }],
         isError: true
+      };
+    }
+  }
+);
+
+// Tool 5: format_file
+server.tool(
+  "format_file",
+  "Format a file using Prettier",
+  {
+    filePath: z.string().describe("The path to the source file to format")
+  },
+  async ({ filePath }) => {
+    try {
+      const { stdout } = await execAsync(`npx prettier --write "${filePath}"`);
+      return {
+        content: [{ type: "text", text: stdout || "File formatted successfully." }]
+      };
+    } catch (err: any) {
+      return {
+        content: [{ type: "text", text: `Error: ${err.message}` }],
+        isError: true
+      };
+    }
+  }
+);
+
+// Tool 6: lint_file
+server.tool(
+  "lint_file",
+  "Lint and fix a file using ESLint",
+  {
+    filePath: z.string().describe("The path to the source file to lint")
+  },
+  async ({ filePath }) => {
+    try {
+      const { stdout } = await execAsync(`npx eslint --fix "${filePath}"`);
+      return {
+        content: [{ type: "text", text: stdout || "File linted and fixed successfully." }]
+      };
+    } catch (err: any) {
+      // ESLint returns code 1 if it finds errors that cannot be fixed automatically
+      return {
+        content: [{ type: "text", text: err.stdout || err.message }]
       };
     }
   }
