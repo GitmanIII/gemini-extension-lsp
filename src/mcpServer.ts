@@ -20,6 +20,7 @@ interface UserSettings {
 class LspServerManager {
   private activeServers: Map<string, LspClient> = new Map();
   private settings: UserSettings = {};
+  public diagnosticsCache: Map<string, any[]> = new Map();
 
   constructor() {
     this.loadSettings();
@@ -54,6 +55,12 @@ class LspServerManager {
 
     const client = new LspClient(config.command, config.args);
     client.start();
+    
+    client.on("notification", (message) => {
+      if (message.method === "textDocument/publishDiagnostics") {
+        this.diagnosticsCache.set(message.params.uri, message.params.diagnostics);
+      }
+    });
     
     // Initialize the server
     await client.sendRequest("initialize", {
@@ -336,6 +343,59 @@ server.tool(
       // ESLint returns code 1 if it finds errors that cannot be fixed automatically
       return {
         content: [{ type: "text", text: err.stdout || err.message }]
+      };
+    }
+  }
+);
+
+// Tool 7: get_diagnostics
+server.tool(
+  "get_diagnostics",
+  "Get workspace diagnostics (syntax errors, warnings, type errors) for a file",
+  {
+    filePath: z.string().describe("The path to the source file")
+  },
+  async ({ filePath }) => {
+    try {
+      const client = await serverManager.getServerForFile(filePath);
+      const uri = await ensureFileOpen(client, filePath);
+
+      // Polling loop to wait for diagnostics
+      let diagnostics = null;
+      for (let i = 0; i < 20; i++) {
+        if (serverManager.diagnosticsCache.has(uri)) {
+          diagnostics = serverManager.diagnosticsCache.get(uri);
+          break;
+        }
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+
+      if (!diagnostics || diagnostics.length === 0) {
+        return {
+          content: [{ type: "text", text: "No issues found. The file is clean!" }]
+        };
+      }
+
+      const severityMap: Record<number, string> = {
+        1: "Error",
+        2: "Warning",
+        3: "Info",
+        4: "Hint"
+      };
+
+      const formatted = diagnostics.map((d: any) => {
+        const severity = severityMap[d.severity] || "Issue";
+        const line = d.range?.start?.line ?? "?";
+        return `[${severity} - Line ${line}] ${d.message}`;
+      }).join("\n");
+
+      return {
+        content: [{ type: "text", text: formatted }]
+      };
+    } catch (err: any) {
+      return {
+        content: [{ type: "text", text: `Error: ${err.message}` }],
+        isError: true
       };
     }
   }
