@@ -360,9 +360,19 @@ server.tool(
       const client = await serverManager.getServerForFile(filePath);
       const uri = await ensureFileOpen(client, filePath);
 
-      // Polling loop to wait for diagnostics
+      // Fix race condition: Read latest from disk and clear cache
+      const text = fs.readFileSync(filePath, "utf-8");
+      serverManager.diagnosticsCache.delete(uri);
+
+      // Force LSP to update
+      client.sendNotification("textDocument/didChange", {
+        textDocument: { uri, version: Date.now() },
+        contentChanges: [{ text }]
+      });
+
+      // Polling loop to wait for diagnostics (4 seconds)
       let diagnostics = null;
-      for (let i = 0; i < 20; i++) {
+      for (let i = 0; i < 40; i++) {
         if (serverManager.diagnosticsCache.has(uri)) {
           diagnostics = serverManager.diagnosticsCache.get(uri);
           break;
