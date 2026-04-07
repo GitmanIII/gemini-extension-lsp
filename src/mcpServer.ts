@@ -304,45 +304,24 @@ server.tool(
   }
 );
 
-// Tool 5: format_file
+// Tool: auto_fix
 server.tool(
-  "format_file",
-  "Format a file using Prettier",
+  "auto_fix",
+  "Format, lint, organize imports, and apply safe fixes to a file using Biome",
   {
-    filePath: z.string().describe("The path to the source file to format")
+    filePath: z.string().describe("The path to the source file to fix")
   },
   async ({ filePath }) => {
     try {
-      const { stdout } = await execAsync(`npx prettier --write "${filePath}"`);
+      // 'check --write' does formatting, linting fixes, and import sorting all at once
+      const { stdout } = await execAsync(`npx @biomejs/biome check --write "${filePath}"`);
       return {
-        content: [{ type: "text", text: stdout || "File formatted successfully." }]
+        content: [{ type: "text", text: stdout || "File successfully formatted and fixed by Biome." }]
       };
     } catch (err: any) {
+      // Biome exits with an error code if it finds linting rules it cannot safely auto-fix
       return {
-        content: [{ type: "text", text: `Error: ${err.message}` }],
-        isError: true
-      };
-    }
-  }
-);
-
-// Tool 6: lint_file
-server.tool(
-  "lint_file",
-  "Lint and fix a file using ESLint",
-  {
-    filePath: z.string().describe("The path to the source file to lint")
-  },
-  async ({ filePath }) => {
-    try {
-      const { stdout } = await execAsync(`npx eslint --fix "${filePath}"`);
-      return {
-        content: [{ type: "text", text: stdout || "File linted and fixed successfully." }]
-      };
-    } catch (err: any) {
-      // ESLint returns code 1 if it finds errors that cannot be fixed automatically
-      return {
-        content: [{ type: "text", text: err.stdout || err.message }]
+        content: [{ type: "text", text: `Biome found issues it could not auto-fix in ${filePath}:\n${err.stdout || err.message}` }]
       };
     }
   }
