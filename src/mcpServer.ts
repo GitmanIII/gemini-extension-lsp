@@ -307,7 +307,7 @@ server.tool(
 // Tool: auto_fix
 server.tool(
   "auto_fix",
-  "Format, lint, organize imports, and apply safe fixes to a file using Biome",
+  "Format, lint, and fix JS, TS, JSX, TSX, JSON, and CSS files ONLY using Biome. Do NOT use this tool for Python, Go, C++, or other languages.",
   {
     filePath: z.string().describe("The path to the source file to fix")
   },
