@@ -81,11 +81,30 @@ class LspServerManager {
       }
     });
     
-    // Initialize the server
+    // Initialize the server with proper capabilities for refactoring
     await client.sendRequest("initialize", {
       processId: process.pid,
       rootUri: `file://${process.cwd()}`,
-      capabilities: {}
+      capabilities: {
+        workspace: {
+          workspaceEdit: {
+            documentChanges: true,
+            resourceOperations: ["create", "rename", "delete"]
+          }
+        },
+        textDocument: {
+          rename: {
+            prepareSupport: true
+          },
+          codeAction: {
+            codeActionLiteralSupport: {
+              codeActionKind: {
+                valueSet: ["quickfix", "refactor", "source"]
+              }
+            }
+          }
+        }
+      }
     });
     client.sendNotification("initialized", {});
 
@@ -209,6 +228,15 @@ function applyLspEdits(text: string, edits: any[]): string {
   return result;
 }
 
+function uriToPath(uri: string): string {
+  let p = uri.replace(/^file:\/\//, "");
+  // On Windows, the URI might be file:///C:/path, so p is /C:/path
+  if (os.platform() === 'win32' && p.startsWith('/')) {
+    p = p.substring(1);
+  }
+  return decodeURIComponent(p);
+}
+
 async function applyWorkspaceEdit(edit: any) {
   if (!edit) return "No changes suggested by the server.";
 
@@ -217,8 +245,7 @@ async function applyWorkspaceEdit(edit: any) {
   // Handle changes (Map of URI to TextEdit[])
   if (edit.changes) {
     for (const [uri, edits] of Object.entries(edit.changes)) {
-      const filePath = uri.replace("file://", "").replace(/^\//, "");
-      const fullPath = path.isAbsolute(filePath) ? filePath : path.resolve(filePath);
+      const fullPath = uriToPath(uri);
       const text = fs.readFileSync(fullPath, "utf-8");
       const newText = applyLspEdits(text, edits as any[]);
       fs.writeFileSync(fullPath, newText, "utf-8");
@@ -230,8 +257,7 @@ async function applyWorkspaceEdit(edit: any) {
   if (edit.documentChanges) {
     for (const change of edit.documentChanges) {
       if (change.textDocument) {
-        const filePath = change.textDocument.uri.replace("file://", "").replace(/^\//, "");
-        const fullPath = path.isAbsolute(filePath) ? filePath : path.resolve(filePath);
+        const fullPath = uriToPath(change.textDocument.uri);
         const text = fs.readFileSync(fullPath, "utf-8");
         const newText = applyLspEdits(text, change.edits);
         fs.writeFileSync(fullPath, newText, "utf-8");

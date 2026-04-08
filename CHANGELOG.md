@@ -2,6 +2,12 @@
 
 This document summarizes the recent architectural fixes and improvements made to stabilize and optimize the Gemini Extension LSP.
 
+## [0.3.1] - Advanced Refactoring Fixes
+
+### Fixed: Refactoring Robustness
+*   **Capabilities Negotiation:** Updated the `initialize` handshake to explicitly request `workspaceEdit` and `rename` support. This fixes an issue where strict language servers (like `vtsls`) would silently ignore rename requests.
+*   **URI Resolution:** Added a dedicated `uriToPath` helper to accurately translate Language Server URIs into local absolute paths, fixing a bug where renames and quick-fixes were being applied to the wrong directory.
+
 ## [0.3.0] - Refactoring & Quick Fixes
 
 ### Added: Workspace Edit Support

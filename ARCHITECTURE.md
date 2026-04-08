@@ -42,6 +42,7 @@ This is the main MCP server implementation. It registers the available tools and
 ### 2. `LspServerManager` (The Orchestrator)
 Manages the lifecycle of language server processes for languages requiring the full LSP (e.g., C/C++) and for advanced features (navigation, hover).
 
+*   **Capabilities Negotiation:** During `initialize`, the extension explicitly requests `workspaceEdit`, `rename`, and `codeAction` support from the server to enable advanced refactoring tools.
 *   **Dynamic Instantiation:** Reads `~/.gemini/settings.json` to launch configured binaries (e.g., `vtsls`, `gopls`, `clangd`).
 *   **Singleton per Extension:** Ensures only one instance runs per extension to save memory.
 *   **Synchronization:** Uses an `initializingServers` lock to prevent duplicate process spawns during concurrent requests.
@@ -49,3 +50,6 @@ Manages the lifecycle of language server processes for languages requiring the f
 
 ### 3. `LspClient.ts` (The JSON-RPC Bridge)
 Handles low-level stdin/stdout communication with a single language server child process. It includes robust stream parsing for `Content-Length` headers and handles process termination (via `close` events) to prevent hanging Promises.
+
+## Workspace Edit Middleware
+The extension includes a robust `applyWorkspaceEdit` system that can apply complex, multi-file changes suggested by the Language Server. It handles both `changes` (map-based) and `documentChanges` (array-based) formats and includes a `uriToPath` helper for reliable cross-platform file resolution.
