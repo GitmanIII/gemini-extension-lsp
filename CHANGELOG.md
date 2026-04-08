@@ -2,6 +2,14 @@
 
 This document summarizes the recent architectural fixes and improvements made to stabilize and optimize the Gemini Extension LSP.
 
+## [0.3.2] - Workspace Discovery & Sync
+
+### Added: Global Navigation
+*   **`getWorkspaceSymbols`**: Added support for searching symbols across the entire project via `workspace/symbol`. This allows the LLM to find where classes/functions are defined without knowing the filename.
+
+### Added: Disk Sync Reliability
+*   **`didSave` Notifications**: The extension now explicitly sends `textDocument/didSave` after formatting or renaming. This ensures that background analysis (like cross-file type checking) remains in sync with the filesystem.
+
 ## [0.3.1] - Advanced Refactoring Fixes
 
 ### Fixed: Refactoring Robustness

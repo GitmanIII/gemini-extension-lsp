@@ -29,6 +29,7 @@ This is the main MCP server implementation. It registers the available tools and
 
 **Available Tools:**
 *   `getDocumentSymbols`: Fetches and compresses the structural outline of a file.
+*   `getWorkspaceSymbols`: Finds a symbol by name across the entire project (vital for navigation).
 *   `goToDefinition`: Finds where a specific symbol is defined.
 *   `goToImplementation`: Finds the actual code implementing an interface or trait method.
 *   `findReferences`: Locates all usages of a symbol across the workspace.
@@ -52,4 +53,4 @@ Manages the lifecycle of language server processes for languages requiring the f
 Handles low-level stdin/stdout communication with a single language server child process. It includes robust stream parsing for `Content-Length` headers and handles process termination (via `close` events) to prevent hanging Promises.
 
 ## Workspace Edit Middleware
-The extension includes a robust `applyWorkspaceEdit` system that can apply complex, multi-file changes suggested by the Language Server. It handles both `changes` (map-based) and `documentChanges` (array-based) formats and includes a `uriToPath` helper for reliable cross-platform file resolution.
+The extension includes a robust `applyWorkspaceEdit` system that can apply complex, multi-file changes suggested by the Language Server. It handles both `changes` (map-based) and `documentChanges` (array-based) formats and includes a `uriToPath` helper for reliable cross-platform file resolution. After applying changes to disk, it automatically sends a `textDocument/didSave` notification to the server to ensure all background analysis (like cross-file type checking) remains in sync.

@@ -249,6 +249,10 @@ async function applyWorkspaceEdit(edit: any) {
       const text = fs.readFileSync(fullPath, "utf-8");
       const newText = applyLspEdits(text, edits as any[]);
       fs.writeFileSync(fullPath, newText, "utf-8");
+      
+      const client = await serverManager.getServerForFile(fullPath);
+      client.sendNotification("textDocument/didSave", { textDocument: { uri } });
+      
       report += `- Updated ${fullPath}\n`;
     }
   }
@@ -257,10 +261,15 @@ async function applyWorkspaceEdit(edit: any) {
   if (edit.documentChanges) {
     for (const change of edit.documentChanges) {
       if (change.textDocument) {
-        const fullPath = uriToPath(change.textDocument.uri);
+        const uri = change.textDocument.uri;
+        const fullPath = uriToPath(uri);
         const text = fs.readFileSync(fullPath, "utf-8");
         const newText = applyLspEdits(text, change.edits);
         fs.writeFileSync(fullPath, newText, "utf-8");
+        
+        const client = await serverManager.getServerForFile(fullPath);
+        client.sendNotification("textDocument/didSave", { textDocument: { uri } });
+        
         report += `- Updated ${fullPath}\n`;
       }
     }
@@ -363,6 +372,36 @@ async function ensureFileOpen(client: LspClient, filePath: string) {
     }
     return uri;
 }
+
+// Tool: getWorkspaceSymbols
+server.tool(
+  "getWorkspaceSymbols",
+  "Find a symbol (class, function, etc) by name across the entire project",
+  {
+    query: z.string().describe("The name of the symbol to search for"),
+    extension: z.string().describe("The file extension to search within (e.g. '.ts', '.go')")
+  },
+  async ({ query, extension }) => {
+    try {
+      // Use a dummy file path to get the correct LSP client for the extension
+      const dummyPath = path.join(process.cwd(), `index${extension}`);
+      const client = await serverManager.getServerForFile(dummyPath);
+      
+      const result = await client.sendRequest("workspace/symbol", {
+        query
+      });
+      
+      return {
+        content: [{ type: "text", text: compressLocations(result) }]
+      };
+    } catch (err: any) {
+      return {
+        content: [{ type: "text", text: `Error: ${err.message}` }],
+        isError: true
+      };
+    }
+  }
+);
 
 // Tool 1: getDocumentSymbols
 server.tool(
@@ -662,6 +701,8 @@ server.tool(
         textDocument: { uri, version: Date.now() }, 
         contentChanges: [{ text: newText }] 
       });
+
+      client.sendNotification("textDocument/didSave", { textDocument: { uri } });
 
       return { content: [{ type: "text", text: `[LSP] File successfully formatted by the native ${ext} Language Server.` }] };
 
