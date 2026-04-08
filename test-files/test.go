@@ -2,10 +2,17 @@ package main
 
 import "fmt"
 
-func Hello() string {
-	return 123 // Error: cannot use int as string
+type Greeter interface {
+	Hello() string
+}
+
+type GoTest struct{}
+
+func (g GoTest) Hello() string {
+	return "world"
 }
 
 func main() {
-	fmt.Println(Hello("too many")) // Error: too many arguments
+	var g Greeter = GoTest{}
+	fmt.Println(g.Hello())
 }

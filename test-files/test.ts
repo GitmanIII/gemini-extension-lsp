@@ -1,7 +1,16 @@
-export class TypeScriptTest {
+interface ITest {
+	hello(): string;
+}
+
+export class GptLspTest implements ITest {
 	public hello(): string {
-		return 123; // Error: should be string
+		return "world";
 	}
 }
-const tsTest = new TypeScriptTest();
-console.log(tsTest.hello(1)); // Error: too many arguments
+
+const tsTest = new GptLspTest();
+console.log(tsTest.hello());
+
+// To test rename:
+// 1. Rename 'TypeScriptTest' (Line 4) to 'GptLspTest'
+// 2. Check Line 10 update
