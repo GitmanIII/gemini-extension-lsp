@@ -2,12 +2,30 @@
 
 This document summarizes the recent architectural fixes and improvements made to stabilize and optimize the Gemini Extension LSP.
 
+## [0.3.0] - Refactoring & Quick Fixes
+
+### Added: Workspace Edit Support
+*   **`applyWorkspaceEdit` Middleware**: The extension can now automatically apply complex, multi-file changes suggested by the Language Server (supporting both `changes` and `documentChanges` formats).
+
+### Added: New Tools
+*   **`renameSymbol`**: Safely rename a variable, function, or class across the entire workspace via `textDocument/rename`.
+*   **`getCodeActions` & `applyCodeAction`**: Support for "Quick Fixes" and advanced refactorings (e.g., "Import missing class" or "Extract method").
+*   **`goToImplementation`**: Jump to concrete code implementations of interfaces/traits.
+
+## [0.2.1] - Robustness & Error Handling
+
+### Added: LSP Lifecycle Improvements
+*   **Process Error Handling:** `LspClient.ts` now catches `error` events (like `ENOENT` spawn failures) and correctly rejects pending promises.
+
+### Changed: Diagnostic Reliability
+*   **Extended Polling Timeout:** Increased `get_diagnostics` fallback polling from 4s to 10s to properly support heavier language servers. (Note: Later reverted to 4s based on user performance feedback).
+
 ## [0.2.0] - Optimization & Performance Pivot
 
 ### Added: Fast-Path Optimizations
-*   **Gofmt Fast-Path:** Added direct `gofmt` support for Go formatting, bypassing the slower `gopls` formatting request.
+*   **Gofmt Fast-Path:** Added direct `gofmt` support for Go formatting.
 *   **Rustfmt Fast-Path:** Added direct `rustfmt` support for Rust formatting.
-*   **Ruff/GoVet Diagnostics:** `get_diagnostics` now uses `ruff check` and `go vet` for near-instant feedback, avoiding the LSP polling loop.
+*   **Ruff/GoVet Diagnostics:** `get_diagnostics` now uses `ruff check` and `go vet` for near-instant feedback.
 *   **Biome Integration:** Full instant linting and formatting for the TypeScript/JavaScript ecosystem.
 
 ### Changed: Streamlined Language Support

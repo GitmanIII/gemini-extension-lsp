@@ -172,6 +172,16 @@ function compressHover(hover: any): string {
   return content.trim();
 }
 
+function compressCodeActions(actions: any[]): string {
+  if (!actions || actions.length === 0) return "No code actions available.";
+  
+  return actions.map((action, i) => {
+    const title = action.title || "Untitled Action";
+    const kind = action.kind ? ` [${action.kind}]` : "";
+    return `${i + 1}. ${title}${kind}`;
+  }).join("\n");
+}
+
 function applyLspEdits(text: string, edits: any[]): string {
   const lineOffsets: number[] = [0];
   for (let i = 0; i < text.length; i++) {
@@ -199,6 +209,40 @@ function applyLspEdits(text: string, edits: any[]): string {
   return result;
 }
 
+async function applyWorkspaceEdit(edit: any) {
+  if (!edit) return "No changes suggested by the server.";
+
+  let report = "Applied changes:\n";
+
+  // Handle changes (Map of URI to TextEdit[])
+  if (edit.changes) {
+    for (const [uri, edits] of Object.entries(edit.changes)) {
+      const filePath = uri.replace("file://", "").replace(/^\//, "");
+      const fullPath = path.isAbsolute(filePath) ? filePath : path.resolve(filePath);
+      const text = fs.readFileSync(fullPath, "utf-8");
+      const newText = applyLspEdits(text, edits as any[]);
+      fs.writeFileSync(fullPath, newText, "utf-8");
+      report += `- Updated ${fullPath}\n`;
+    }
+  }
+
+  // Handle documentChanges (Array of TextDocumentEdit | CreateFile | RenameFile | DeleteFile)
+  if (edit.documentChanges) {
+    for (const change of edit.documentChanges) {
+      if (change.textDocument) {
+        const filePath = change.textDocument.uri.replace("file://", "").replace(/^\//, "");
+        const fullPath = path.isAbsolute(filePath) ? filePath : path.resolve(filePath);
+        const text = fs.readFileSync(fullPath, "utf-8");
+        const newText = applyLspEdits(text, change.edits);
+        fs.writeFileSync(fullPath, newText, "utf-8");
+        report += `- Updated ${fullPath}\n`;
+      }
+    }
+  }
+
+  return report;
+}
+
 // --- MCP Server Setup ---
 const server = new McpServer({
   name: "gemini-extension-lsp",
@@ -206,6 +250,41 @@ const server = new McpServer({
 });
 
 const serverManager = new LspServerManager();
+
+// Tool: renameSymbol
+server.tool(
+  "renameSymbol",
+  "Rename a symbol across the workspace safely using the Language Server",
+  {
+    filePath: z.string().describe("The path to the source file"),
+    line: z.number().describe("0-based line number"),
+    character: z.number().describe("0-based character position"),
+    newName: z.string().describe("The new name for the symbol")
+  },
+  async ({ filePath, line, character, newName }) => {
+    try {
+      const client = await serverManager.getServerForFile(filePath);
+      const uri = await ensureFileOpen(client, filePath);
+      
+      const result = await client.sendRequest("textDocument/rename", {
+        textDocument: { uri },
+        position: { line, character },
+        newName
+      });
+      
+      const report = await applyWorkspaceEdit(result);
+      
+      return {
+        content: [{ type: "text", text: report }]
+      };
+    } catch (err: any) {
+      return {
+        content: [{ type: "text", text: `Error: ${err.message}` }],
+        isError: true
+      };
+    }
+  }
+);
 
 const extensionToLanguageId: Record<string, string> = {
   '.ts': 'typescript',
@@ -368,6 +447,121 @@ server.tool(
       
       return {
         content: [{ type: "text", text: compressHover(result) }]
+      };
+    } catch (err: any) {
+      return {
+        content: [{ type: "text", text: `Error: ${err.message}` }],
+        isError: true
+      };
+    }
+  }
+);
+
+// Tool: getCodeActions
+server.tool(
+  "getCodeActions",
+  "Get available code actions (quick fixes, refactorings) for a file region",
+  {
+    filePath: z.string().describe("The path to the source file"),
+    startLine: z.number().describe("0-based start line number"),
+    startCharacter: z.number().describe("0-based start character position"),
+    endLine: z.number().describe("0-based end line number"),
+    endCharacter: z.number().describe("0-based end character position")
+  },
+  async ({ filePath, startLine, startCharacter, endLine, endCharacter }) => {
+    try {
+      const client = await serverManager.getServerForFile(filePath);
+      const uri = await ensureFileOpen(client, filePath);
+      
+      const diagnostics = serverManager.diagnosticsCache.get(uri) || [];
+      
+      const result = await client.sendRequest("textDocument/codeAction", {
+        textDocument: { uri },
+        range: {
+          start: { line: startLine, character: startCharacter },
+          end: { line: endLine, character: endCharacter }
+        },
+        context: { diagnostics }
+      });
+      
+      // Store the full action objects in a temporary cache for applyCodeAction
+      (client as any)._lastCodeActions = result;
+
+      return {
+        content: [{ type: "text", text: compressCodeActions(result) }]
+      };
+    } catch (err: any) {
+      return {
+        content: [{ type: "text", text: `Error: ${err.message}` }],
+        isError: true
+      };
+    }
+  }
+);
+
+// Tool: applyCodeAction
+server.tool(
+  "applyCodeAction",
+  "Apply a specific code action by its index (1-based, from getCodeActions)",
+  {
+    filePath: z.string().describe("The path to the source file"),
+    index: z.number().describe("1-based index of the action to apply")
+  },
+  async ({ filePath, index }) => {
+    try {
+      const client = await serverManager.getServerForFile(filePath);
+      const actions = (client as any)._lastCodeActions;
+      
+      if (!actions || index < 1 || index > actions.length) {
+        throw new Error("Invalid action index or no actions cached. Run getCodeActions first.");
+      }
+      
+      const action = actions[index - 1];
+      let report = `Applying: ${action.title}\n`;
+      
+      if (action.edit) {
+        report += await applyWorkspaceEdit(action.edit);
+      } else if (action.command) {
+        const result = await client.sendRequest("workspace/executeCommand", {
+          command: action.command.command,
+          arguments: action.command.arguments
+        });
+        report += `Command executed: ${action.command.command}`;
+      }
+      
+      return {
+        content: [{ type: "text", text: report }]
+      };
+    } catch (err: any) {
+      return {
+        content: [{ type: "text", text: `Error: ${err.message}` }],
+        isError: true
+      };
+    }
+  }
+);
+
+// Tool: goToImplementation
+server.tool(
+  "goToImplementation",
+  "Find the actual implementation(s) of a symbol (e.g., interface method to concrete class method)",
+  {
+    filePath: z.string().describe("The path to the source file"),
+    line: z.number().describe("0-based line number"),
+    character: z.number().describe("0-based character position")
+  },
+  async ({ filePath, line, character }) => {
+    try {
+      const client = await serverManager.getServerForFile(filePath);
+      const uri = await ensureFileOpen(client, filePath);
+      
+      const result = await client.sendRequest("textDocument/implementation", {
+        textDocument: { uri },
+        position: { line, character }
+      });
+      
+      return {
+        content: [{ type: "text", text: compressLocations(result) }]
       };
     } catch (err: any) {
       return {

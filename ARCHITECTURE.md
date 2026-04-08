@@ -30,8 +30,12 @@ This is the main MCP server implementation. It registers the available tools and
 **Available Tools:**
 *   `getDocumentSymbols`: Fetches and compresses the structural outline of a file.
 *   `goToDefinition`: Finds where a specific symbol is defined.
+*   `goToImplementation`: Finds the actual code implementing an interface or trait method.
 *   `findReferences`: Locates all usages of a symbol across the workspace.
 *   `getHoverDocs`: Retrieves documentation or type signatures for a symbol.
+*   `renameSymbol`: Safely renames a symbol across the entire workspace.
+*   `getCodeActions`: Lists available quick-fixes and refactorings for a code region.
+*   `applyCodeAction`: Executes a chosen code action (e.g., "Import missing class").
 *   `format_and_fix`: Auto-formats and lints using native tools or the active LSP.
 *   `get_diagnostics`: Retrieves cached syntax errors, type errors, and warnings.
 
