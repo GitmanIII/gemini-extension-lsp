@@ -11,7 +11,7 @@ This document summarizes the recent architectural fixes and improvements made to
 *   **Biome Integration:** Full instant linting and formatting for the TypeScript/JavaScript ecosystem.
 
 ### Changed: Streamlined Language Support
-*   **Focused Core:** Dropped support for several heavy or obscure languages to prioritize speed and reliability for modern stacks. Removed: `.java`, `.php`, `.swift`, `.kt`, `.kts`, `.lua`, `.rb`.
+*   **Focused Core:** Dropped support for several heavy or obscure languages to prioritize speed and reliability for modern stacks. Removed: `.cs`, `.java`, `.php`, `.swift`, `.kt`, `.kts`, `.lua`, `.rb`.
 *   **Architecture Update:** Shifted the design philosophy to "Fast-Path First" for common operations.
 
 ## [0.1.0] - Stability & Bug Fixes

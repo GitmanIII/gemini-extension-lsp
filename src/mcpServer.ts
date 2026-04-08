@@ -214,7 +214,6 @@ const extensionToLanguageId: Record<string, string> = {
   '.jsx': 'javascriptreact',
   '.py': 'python',
   '.go': 'go',
-  '.cs': 'csharp',
   '.rs': 'rust',
   '.c': 'c',
   '.cpp': 'cpp',

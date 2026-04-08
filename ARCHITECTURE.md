@@ -15,7 +15,7 @@ A key design principle is "Fast-Path First." For high-performance development st
 *   **Python:** Uses **Ruff** (`ruff format` and `ruff check --fix`).
 *   **Go:** Uses **Gofmt** (`gofmt -w`).
 *   **Rust:** Uses **Rustfmt** (`rustfmt`).
-*   **Fallback:** Other languages (C/C++, C#) fall back to the native LSP `textDocument/formatting` request.
+*   **Fallback:** Other languages (C/C++) fall back to the native LSP `textDocument/formatting` request.
 
 ### 2. `get_diagnostics` Fast-Paths
 *   **Python:** Uses **Ruff** (`ruff check`) for instant results.
@@ -36,7 +36,7 @@ This is the main MCP server implementation. It registers the available tools and
 *   `get_diagnostics`: Retrieves cached syntax errors, type errors, and warnings.
 
 ### 2. `LspServerManager` (The Orchestrator)
-Manages the lifecycle of language server processes for languages requiring the full LSP (e.g., C/C++, C#) and for advanced features (navigation, hover).
+Manages the lifecycle of language server processes for languages requiring the full LSP (e.g., C/C++) and for advanced features (navigation, hover).
 
 *   **Dynamic Instantiation:** Reads `~/.gemini/settings.json` to launch configured binaries (e.g., `vtsls`, `gopls`, `clangd`).
 *   **Singleton per Extension:** Ensures only one instance runs per extension to save memory.
