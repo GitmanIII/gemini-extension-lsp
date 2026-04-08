@@ -2,13 +2,13 @@ interface ITest {
 	hello(): string;
 }
 
-export class GptLspTest implements ITest {
+export class TypeScriptTest implements ITest {
 	public hello(): string {
 		return "world";
 	}
 }
 
-const tsTest = new GptLspTest();
+const tsTest = new TypeScriptTest();
 console.log(tsTest.hello());
 
 // To test rename:

@@ -176,6 +176,28 @@ function compressLocations(locations: any | any[]): string {
   }).join("\n");
 }
 
+function compressWorkspaceSymbols(symbols: any[]): string {
+  if (!symbols || symbols.length === 0) return "No symbols found.";
+  
+  const kindMap: Record<number, string> = {
+    1: "File", 2: "Module", 3: "Namespace", 4: "Package", 5: "Class", 
+    6: "Method", 7: "Property", 8: "Field", 9: "Constructor", 10: "Enum", 
+    11: "Interface", 12: "Function", 13: "Variable", 14: "Constant", 
+    15: "String", 16: "Number", 17: "Boolean", 18: "Array", 19: "Object", 
+    20: "Key", 21: "Null", 22: "EnumMember", 23: "Struct", 24: "Event", 
+    25: "Operator", 26: "TypeParameter"
+  };
+
+  return symbols.map(sym => {
+    const kindStr = kindMap[sym.kind] || "Symbol";
+    const loc = sym.location;
+    const uri = loc?.uri?.replace("file://", "") || "unknown file";
+    const line = loc?.range?.start?.line ?? "?";
+    const container = sym.containerName ? ` (in ${sym.containerName})` : "";
+    return `[${kindStr}] ${sym.name}${container} - ${uri} (Line ${line})`;
+  }).join("\n");
+}
+
 function compressHover(hover: any): string {
   if (!hover || !hover.contents) return "No hover information found.";
   
@@ -392,7 +414,7 @@ server.tool(
       });
       
       return {
-        content: [{ type: "text", text: compressLocations(result) }]
+        content: [{ type: "text", text: compressWorkspaceSymbols(result) }]
       };
     } catch (err: any) {
       return {
