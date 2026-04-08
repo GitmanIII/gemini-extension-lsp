@@ -317,6 +317,10 @@ async function forceIndexWorkspace(client: LspClient, extension: string) {
         for (const file of files) {
             await ensureFileOpen(client, file);
         }
+        
+        // Give the LSP a moment to parse the newly opened files
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
         console.error(`[Indexer] Successfully indexed ${files.length} files.`);
     } catch (e: any) {
         console.error(`[Indexer] Scan failed: ${e.message}`);

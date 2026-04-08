@@ -2,6 +2,11 @@
 
 This document summarizes the recent architectural fixes and improvements made to stabilize and optimize the Gemini Extension LSP.
 
+## [0.3.5] - Cross-File Sync & Timing
+
+### Improved: Zero-Config Reliability
+*   **Sync Timing**: Added a 500ms delay in `forceIndexWorkspace` after opening files. This gives Language Servers (like `vtsls`) enough time to parse imports and establish cross-file relationships before a rename or reference search is executed.
+
 ## [0.3.4] - Smart Workspace Indexing
 
 ### Added: True Zero-Config Refactoring

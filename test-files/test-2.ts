@@ -1,4 +1,4 @@
-import { TypeScriptTest } from './test';
+import { ProjectLspTest } from "./test";
 
-const anotherInstance = new TypeScriptTest();
+const anotherInstance = new ProjectLspTest();
 console.log("Another one: " + anotherInstance.hello());

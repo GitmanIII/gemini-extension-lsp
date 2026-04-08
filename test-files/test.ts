@@ -2,13 +2,13 @@ interface ITest {
 	hello(): string;
 }
 
-export class UltimateLspTestt implements ITest {
+export class ProjectLspTest implements ITest {
 	public hello(): string {
 		return "world";
 	}
 }
 
-const tsTest = new UltimateLspTestt();
+const tsTest = new ProjectLspTest();
 console.log(tsTest.hello());
 
 // To test rename:
