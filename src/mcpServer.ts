@@ -405,13 +405,44 @@ server.tool(
   },
   async ({ query, extension }) => {
     try {
-      // Use a dummy file path to get the correct LSP client for the extension
       const dummyPath = path.join(process.cwd(), `index${extension}`);
       const client = await serverManager.getServerForFile(dummyPath);
       
-      const result = await client.sendRequest("workspace/symbol", {
+      let result = await client.sendRequest("workspace/symbol", {
         query
       });
+      
+      // SMART FALLBACK: If LSP returns nothing, it might be a config issue (like tsconfig.json)
+      // We will perform a manual search and "force" the LSP to see those files.
+      if (!result || (Array.isArray(result) && result.length === 0)) {
+        console.error(`[Discovery] LSP returned no results for "${query}". Attempting Smart Fallback...`);
+        
+        // 1. Find potential files using a simple filesystem scan
+        const { stdout } = await execAsync(`find . -maxdepth 4 -name "*${extension}" -not -path "*/node_modules/*" -not -path "*/build/*" -not -path "*/.git/*"`);
+        const matches = stdout.split('\n').filter(f => f.trim() !== '');
+        const potentialFiles: string[] = [];
+        
+        // Limit to first 20 matches to avoid overwhelming the server
+        for (const file of matches.slice(0, 20)) {
+           try {
+             const content = fs.readFileSync(file, 'utf-8');
+             if (content.includes(query)) {
+               potentialFiles.push(file);
+             }
+           } catch (e) {}
+        }
+
+        if (potentialFiles.length > 0) {
+          console.error(`[Discovery] Found ${potentialFiles.length} potential files via fallback. Forcing LSP indexing...`);
+          // 2. Force the LSP to open these files so it indexes them
+          for (const file of potentialFiles) {
+            await ensureFileOpen(client, file);
+          }
+          
+          // 3. Try the LSP request again now that files are "open"
+          result = await client.sendRequest("workspace/symbol", { query });
+        }
+      }
       
       return {
         content: [{ type: "text", text: compressWorkspaceSymbols(result) }]
@@ -617,6 +648,11 @@ server.tool(
           command: action.command.command,
           arguments: action.command.arguments
         });
+        
+        // After a command that might change the disk, notify the server
+        const uri = `file://${path.resolve(filePath)}`;
+        client.sendNotification("textDocument/didSave", { textDocument: { uri } });
+        
         report += `Command executed: ${action.command.command}`;
       }
       

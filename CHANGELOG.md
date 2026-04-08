@@ -2,6 +2,14 @@
 
 This document summarizes the recent architectural fixes and improvements made to stabilize and optimize the Gemini Extension LSP.
 
+## [0.3.3] - Zero-Config Discovery & Reliability
+
+### Added: Smart Discovery Fallback
+*   **Zero-Config Workspace Search**: `getWorkspaceSymbols` now includes a filesystem-scan fallback. If the Language Server fails to find symbols due to missing or restrictive configuration (like `tsconfig.json`), the extension will manually find and "force" the server to index those files.
+
+### Fixed: Synchronization
+*   **`applyCodeAction` Sync**: Added a `didSave` notification after executing workspace commands (like "Organize Imports") to ensure the Language Server remains in sync with disk changes.
+
 ## [0.3.2] - Workspace Discovery & Sync
 
 ### Added: Global Navigation

@@ -54,3 +54,9 @@ Handles low-level stdin/stdout communication with a single language server child
 
 ## Workspace Edit Middleware
 The extension includes a robust `applyWorkspaceEdit` system that can apply complex, multi-file changes suggested by the Language Server. It handles both `changes` (map-based) and `documentChanges` (array-based) formats and includes a `uriToPath` helper for reliable cross-platform file resolution. After applying changes to disk, it automatically sends a `textDocument/didSave` notification to the server to ensure all background analysis (like cross-file type checking) remains in sync.
+
+## Zero-Config Discovery (Smart Fallback)
+To ensure the extension works "out of the box" in unconfigured projects, `getWorkspaceSymbols` includes a **Smart Fallback** mechanism. If the Language Server returns no results (often due to restrictive `tsconfig.json` or `pyrightconfig.json` settings), the extension:
+1.  Performs a high-speed filesystem scan using `find` and raw text matching.
+2.  Forces the Language Server to "Open" and index the matching files.
+3.  Re-submits the request to the Language Server, resulting in accurate, project-wide symbol discovery without requiring manual configuration.
