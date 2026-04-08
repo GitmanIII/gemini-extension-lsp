@@ -23,9 +23,9 @@ Thumbs.db
 
 # Tests
 TESTING.md
-#test-files/
+test-files/
 
 # Build and Changelogs
-#ARCHITECTURE.md
-#CHANGELOG.md
+ARCHITECTURE.md
+CHANGELOG.md
 
