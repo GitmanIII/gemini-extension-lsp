@@ -263,6 +263,7 @@ server.tool(
   },
   async ({ filePath, line, character, newName }) => {
     try {
+      console.error(`[Rename] Renaming symbol in ${filePath} at ${line}:${character} to ${newName}`);
       const client = await serverManager.getServerForFile(filePath);
       const uri = await ensureFileOpen(client, filePath);
       
@@ -272,12 +273,15 @@ server.tool(
         newName
       });
       
+      console.error(`[Rename] LSP Result: ${JSON.stringify(result)}`);
+      
       const report = await applyWorkspaceEdit(result);
       
       return {
         content: [{ type: "text", text: report }]
       };
     } catch (err: any) {
+      console.error(`[Rename] Error: ${err.message}`);
       return {
         content: [{ type: "text", text: `Error: ${err.message}` }],
         isError: true
