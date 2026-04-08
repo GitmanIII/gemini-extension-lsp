@@ -1,0 +1,7 @@
+{
+  "test": "world",
+  "nested": {
+    "hello": "world"
+  },
+  "error": // Error: missing value
+}

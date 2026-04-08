@@ -31,6 +31,10 @@ export class LspClient extends EventEmitter {
     });
 
     this.process.on('close', (code) => {
+      for (const { reject } of this.pendingRequests.values()) {
+        reject(new Error(`LSP process closed with code ${code}`));
+      }
+      this.pendingRequests.clear();
       this.emit('close', code);
     });
   }
@@ -44,16 +48,24 @@ export class LspClient extends EventEmitter {
     this.buffer = Buffer.concat([this.buffer, data]);
 
     while (true) {
-      const match = this.buffer.toString('ascii').match(/Content-Length: (\d+)\r\n\r\n/);
-      if (!match) break;
+      const headerEnd = this.buffer.indexOf('\r\n\r\n');
+      if (headerEnd === -1) break;
+
+      const headerText = this.buffer.toString('ascii', 0, headerEnd);
+      const match = headerText.match(/Content-Length:\s*(\d+)/i);
+      
+      if (!match) {
+        console.error('LSP Error: No Content-Length header found. Dropping buffer.');
+        this.buffer = Buffer.alloc(0);
+        break;
+      }
 
       const contentLength = parseInt(match[1], 10);
-      const headerLength = match[0].length;
-      const totalLength = headerLength + contentLength;
+      const totalLength = headerEnd + 4 + contentLength;
 
       if (this.buffer.length < totalLength) break;
 
-      const messageBuffer = this.buffer.subarray(headerLength, totalLength);
+      const messageBuffer = this.buffer.subarray(headerEnd + 4, totalLength);
       this.buffer = this.buffer.subarray(totalLength);
 
       try {

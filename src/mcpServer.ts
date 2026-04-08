@@ -19,8 +19,10 @@ interface UserSettings {
 
 class LspServerManager {
   private activeServers: Map<string, LspClient> = new Map();
+  private initializingServers: Map<string, Promise<LspClient>> = new Map();
   private settings: UserSettings = {};
   public diagnosticsCache: Map<string, any[]> = new Map();
+  public openedFiles: Set<string> = new Set();
 
   constructor() {
     this.loadSettings();
@@ -44,6 +46,23 @@ class LspServerManager {
       return this.activeServers.get(ext)!;
     }
 
+    if (this.initializingServers.has(ext)) {
+      return this.initializingServers.get(ext)!;
+    }
+
+    const initPromise = this._initializeServer(ext);
+    this.initializingServers.set(ext, initPromise);
+
+    try {
+      const client = await initPromise;
+      this.activeServers.set(ext, client);
+      return client;
+    } finally {
+      this.initializingServers.delete(ext);
+    }
+  }
+
+  private async _initializeServer(ext: string): Promise<LspClient> {
     const config = this.settings.lsp?.[ext];
     if (!config) {
       throw new Error(
@@ -70,7 +89,6 @@ class LspServerManager {
     });
     client.sendNotification("initialized", {});
 
-    this.activeServers.set(ext, client);
     return client;
   }
 }
@@ -189,19 +207,49 @@ const server = new McpServer({
 
 const serverManager = new LspServerManager();
 
+const extensionToLanguageId: Record<string, string> = {
+  '.ts': 'typescript',
+  '.js': 'javascript',
+  '.tsx': 'typescriptreact',
+  '.jsx': 'javascriptreact',
+  '.py': 'python',
+  '.go': 'go',
+  '.cs': 'csharp',
+  '.rs': 'rust',
+  '.c': 'c',
+  '.cpp': 'cpp',
+  '.h': 'c',
+  '.hpp': 'cpp',
+  '.json': 'json',
+  '.yaml': 'yaml',
+  '.yml': 'yaml',
+  '.md': 'markdown',
+  '.html': 'html',
+  '.css': 'css',
+  '.sh': 'shellscript'
+};
+
+function getLanguageId(filePath: string): string {
+  const ext = path.extname(filePath).toLowerCase();
+  return extensionToLanguageId[ext] || ext.replace('.', '') || 'text';
+}
+
 // Helper to open a file before running commands that require the file to be open
 async function ensureFileOpen(client: LspClient, filePath: string) {
     const uri = `file://${path.resolve(filePath)}`;
+    if (serverManager.openedFiles.has(uri)) return uri;
+
     try {
         const text = fs.readFileSync(filePath, "utf-8");
         client.sendNotification("textDocument/didOpen", {
             textDocument: {
                 uri,
-                languageId: path.extname(filePath).replace('.', '') || 'text',
+                languageId: getLanguageId(filePath),
                 version: 1,
                 text
             }
         });
+        serverManager.openedFiles.add(uri);
     } catch (e) {
         // Ignore file read errors, might be an external file
     }
@@ -357,7 +405,19 @@ server.tool(
         return { content: [{ type: "text", text: "[Ruff] Python file formatted and linted instantly." }] };
       }
 
-      // ROUTE 3: The Native LSP Fallback (C++, Go, Rust, PHP, etc.)
+      // ROUTE 3: The Gofmt Fast-Path (Go)
+      if (ext === '.go') {
+        await execAsync(`gofmt -w "${filePath}"`);
+        return { content: [{ type: "text", text: "[Gofmt] Go file formatted instantly." }] };
+      }
+
+      // ROUTE 4: The Rustfmt Fast-Path (Rust)
+      if (ext === '.rs') {
+        await execAsync(`rustfmt "${filePath}"`);
+        return { content: [{ type: "text", text: "[Rustfmt] Rust file formatted instantly." }] };
+      }
+
+      // ROUTE 5: The Native LSP Fallback (C++, Java, PHP, etc.)
       const client = await serverManager.getServerForFile(filePath);
       const uri = await ensureFileOpen(client, filePath);
       const text = fs.readFileSync(filePath, "utf-8");
@@ -400,6 +460,29 @@ server.tool(
   },
   async ({ filePath }) => {
     try {
+      const ext = path.extname(filePath);
+
+      // FAST PATH 1: Ruff (Python)
+      if (ext === '.py') {
+        try {
+          const { stdout } = await execAsync(`ruff check "${filePath}"`);
+          return { content: [{ type: "text", text: stdout || "No issues found. The file is clean!" }] };
+        } catch (err: any) {
+          // Ruff exits with non-zero if issues found
+          return { content: [{ type: "text", text: err.stdout || err.message }] };
+        }
+      }
+
+      // FAST PATH 2: Go Vet (Go)
+      if (ext === '.go') {
+        try {
+          const { stderr } = await execAsync(`go vet "${filePath}"`);
+          return { content: [{ type: "text", text: stderr || "No issues found. The file is clean!" }] };
+        } catch (err: any) {
+          return { content: [{ type: "text", text: err.stderr || err.message }] };
+        }
+      }
+
       const client = await serverManager.getServerForFile(filePath);
       const uri = await ensureFileOpen(client, filePath);
 

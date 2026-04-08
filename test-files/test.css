@@ -1,0 +1,4 @@
+.greeting {
+    color: 123; /* Error: invalid color */
+    font-size: "big"; /* Error: invalid unit */
+}

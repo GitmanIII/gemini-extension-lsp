@@ -1,0 +1,4 @@
+test: world
+nested:
+  hello: world
+  error: [unclosed array # Error: invalid yaml
