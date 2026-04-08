@@ -331,38 +331,33 @@ server.tool(
   }
 );
 
-// Tool: auto_fix
+// Tool: format_and_fix
 server.tool(
-  "auto_fix",
-  "Format, lint, and fix JS, TS, JSX, TSX, JSON, and CSS files ONLY using Biome. Do NOT use this tool for Python, Go, C++, or other languages.",
+  "format_and_fix",
+  "The ultimate auto-formatter and linter. Works on almost any language. ALWAYS use this tool after modifying a file to ensure perfect syntax, spacing, and imports.",
   {
-    filePath: z.string().describe("The path to the source file to fix")
+    filePath: z.string().describe("The path to the source file to format")
   },
   async ({ filePath }) => {
     try {
-      // 'check --write' does formatting, linting fixes, and import sorting all at once
-      const { stdout } = await execAsync(`npx @biomejs/biome check --write "${filePath}"`);
-      return {
-        content: [{ type: "text", text: stdout || "File successfully formatted and fixed by Biome." }]
-      };
-    } catch (err: any) {
-      // Biome exits with an error code if it finds linting rules it cannot safely auto-fix
-      return {
-        content: [{ type: "text", text: `Biome found issues it could not auto-fix in ${filePath}:\n${err.stdout || err.message}` }]
-      };
-    }
-  }
-);
+      const ext = path.extname(filePath);
+      const webExtensions = ['.js', '.ts', '.jsx', '.tsx', '.json', '.css', '.graphql'];
 
-// Tool 8: lsp_format
-server.tool(
-  "lsp_format",
-  "Format a file natively using its Language Server. Use this for C++, Go, Python, Rust, PHP, etc. (For JS/TS/CSS/JSON, use auto_fix instead).",
-  {
-    filePath: z.string().describe("The path to the source file")
-  },
-  async ({ filePath }) => {
-    try {
+      // ROUTE 1: The Biome Fast-Path (JS/TS/Web)
+      if (webExtensions.includes(ext)) {
+        const { stdout } = await execAsync(`npx @biomejs/biome check --write "${filePath}"`);
+        return { content: [{ type: "text", text: `[Biome] File formatted and linted instantly.\n${stdout}` }] };
+      }
+
+      // ROUTE 2: The Ruff Fast-Path (Python)
+      if (ext === '.py') {
+        // Ruff formats the code, then applies safe linting fixes (like organizing imports)
+        await execAsync(`ruff format "${filePath}"`);
+        await execAsync(`ruff check --fix "${filePath}"`);
+        return { content: [{ type: "text", text: "[Ruff] Python file formatted and linted instantly." }] };
+      }
+
+      // ROUTE 3: The Native LSP Fallback (C++, Go, Rust, PHP, etc.)
       const client = await serverManager.getServerForFile(filePath);
       const uri = await ensureFileOpen(client, filePath);
       const text = fs.readFileSync(filePath, "utf-8");
@@ -372,23 +367,25 @@ server.tool(
         options: { tabSize: 4, insertSpaces: true } 
       });
 
-      if (!edits || edits.length === 0) {
-        return { content: [{ type: "text", text: "No formatting changes needed." }] };
+      if (!edits || (Array.isArray(edits) && edits.length === 0)) {
+        return { content: [{ type: "text", text: `[LSP] No formatting changes needed for ${ext}.` }] };
       }
 
       const newText = applyLspEdits(text, edits);
       fs.writeFileSync(filePath, newText, "utf-8");
       
+      // Force update the LSP cache
       client.sendNotification("textDocument/didChange", { 
         textDocument: { uri, version: Date.now() }, 
         contentChanges: [{ text: newText }] 
       });
 
-      return { content: [{ type: "text", text: "File successfully formatted by the Language Server." }] };
+      return { content: [{ type: "text", text: `[LSP] File successfully formatted by the native ${ext} Language Server.` }] };
+
     } catch (err: any) {
       return {
-        content: [{ type: "text", text: `Error formatting file: ${err.message}` }],
-        isError: true
+        content: [{ type: "text", text: `Formatting partially failed or found unfixable errors:\n${err.message}` }],
+        isError: false // Return false so the AI reads the warnings instead of panicking
       };
     }
   }
