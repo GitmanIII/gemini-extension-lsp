@@ -1,6 +1,6 @@
 {
   "name": "gemini-extension-lsp",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "Universal LSP Adapter for Gemini CLI via Model Context Protocol",
   "main": "build/mcpServer.js",
   "bin": {

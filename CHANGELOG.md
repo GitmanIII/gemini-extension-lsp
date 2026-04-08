@@ -2,6 +2,12 @@
 
 This document summarizes the recent architectural fixes and improvements made to stabilize and optimize the Gemini Extension LSP.
 
+## [0.3.4] - Smart Workspace Indexing
+
+### Added: True Zero-Config Refactoring
+*   **`forceIndexWorkspace`**: Added a helper that forces the Language Server to index all relevant files in the workspace. This enables project-wide renaming and reference counting to work "out of the box," even if the project lacks a `tsconfig.json` or `pyrightconfig.json`.
+*   **Integrated Refactoring**: `renameSymbol` and `findReferences` now trigger a smart workspace scan before executing to ensure 100% accuracy.
+
 ## [0.3.3] - Zero-Config Discovery & Reliability
 
 ### Added: Smart Discovery Fallback

@@ -308,6 +308,21 @@ const server = new McpServer({
 
 const serverManager = new LspServerManager();
 
+async function forceIndexWorkspace(client: LspClient, extension: string) {
+    try {
+        console.error(`[Indexer] Performing smart workspace scan for *${extension}...`);
+        const { stdout } = await execAsync(`find . -maxdepth 4 -name "*${extension}" -not -path "*/node_modules/*" -not -path "*/build/*" -not -path "*/.git/*"`);
+        const files = stdout.split('\n').filter(f => f.trim() !== '');
+
+        for (const file of files) {
+            await ensureFileOpen(client, file);
+        }
+        console.error(`[Indexer] Successfully indexed ${files.length} files.`);
+    } catch (e: any) {
+        console.error(`[Indexer] Scan failed: ${e.message}`);
+    }
+}
+
 // Tool: renameSymbol
 server.tool(
   "renameSymbol",
@@ -322,10 +337,14 @@ server.tool(
     try {
       console.error(`[Rename] Renaming symbol in ${filePath} at ${line}:${character} to ${newName}`);
       const client = await serverManager.getServerForFile(filePath);
+
+      // Zero-Config Hack: Ensure all relevant files are open so the LSP indexes the WHOLE project
+      const ext = path.extname(filePath);
+      await forceIndexWorkspace(client, ext);
+
       const uri = await ensureFileOpen(client, filePath);
-      
-      const result = await client.sendRequest("textDocument/rename", {
-        textDocument: { uri },
+
+      const result = await client.sendRequest("textDocument/rename", {        textDocument: { uri },
         position: { line, character },
         newName
       });
@@ -528,6 +547,11 @@ server.tool(
   async ({ filePath, line, character, includeDeclaration }) => {
     try {
       const client = await serverManager.getServerForFile(filePath);
+      
+      // Zero-Config Hack: Ensure all relevant files are open so the LSP indexes the WHOLE project
+      const ext = path.extname(filePath);
+      await forceIndexWorkspace(client, ext);
+      
       const uri = await ensureFileOpen(client, filePath);
       
       const result = await client.sendRequest("textDocument/references", {
