@@ -1,133 +1,141 @@
-import { spawn, ChildProcess } from 'node:child_process';
-import { EventEmitter } from 'node:events';
+import { type ChildProcess, spawn } from "node:child_process";
+import { EventEmitter } from "node:events";
 
 export interface LspMessage {
-  jsonrpc: string;
-  id?: number | string;
-  method?: string;
-  params?: any;
-  result?: any;
-  error?: any;
+	jsonrpc: string;
+	id?: number | string;
+	method?: string;
+	params?: any;
+	result?: any;
+	error?: any;
 }
 
 export class LspClient extends EventEmitter {
-  private process: ChildProcess | null = null;
-  private buffer: Buffer = Buffer.alloc(0);
-  private nextId = 1;
-  private pendingRequests: Map<number | string, { resolve: (val: any) => void; reject: (err: any) => void }> = new Map();
+	private process: ChildProcess | null = null;
+	private buffer: Buffer = Buffer.alloc(0);
+	private nextId = 1;
+	private pendingRequests: Map<
+		number | string,
+		{ resolve: (val: any) => void; reject: (err: any) => void }
+	> = new Map();
 
-  constructor(private command: string, private args: string[]) {
-    super();
-  }
+	constructor(
+		private command: string,
+		private args: string[],
+	) {
+		super();
+	}
 
-  public start() {
-    this.process = spawn(this.command, this.args, {
-      stdio: ['pipe', 'pipe', 'pipe']
-    });
+	public start() {
+		this.process = spawn(this.command, this.args, {
+			stdio: ["pipe", "pipe", "pipe"],
+		});
 
-    this.process.stdout?.on('data', (data: Buffer) => this.handleData(data));
-    this.process.stderr?.on('data', (data: Buffer) => {
-      console.error(`[LSP Error] ${data.toString()}`);
-    });
+		this.process.stdout?.on("data", (data: Buffer) => this.handleData(data));
+		this.process.stderr?.on("data", (data: Buffer) => {
+			console.error(`[LSP Error] ${data.toString()}`);
+		});
 
-    this.process.on('close', (code) => {
-      for (const { reject } of this.pendingRequests.values()) {
-        reject(new Error(`LSP process closed with code ${code}`));
-      }
-      this.pendingRequests.clear();
-      this.emit('close', code);
-    });
-  }
+		this.process.on("close", (code) => {
+			for (const { reject } of this.pendingRequests.values()) {
+				reject(new Error(`LSP process closed with code ${code}`));
+			}
+			this.pendingRequests.clear();
+			this.emit("close", code);
+		});
+	}
 
-  public stop() {
-    this.process?.kill();
-    this.process = null;
-  }
+	public stop() {
+		this.process?.kill();
+		this.process = null;
+	}
 
-  private handleData(data: Buffer) {
-    this.buffer = Buffer.concat([this.buffer, data]);
+	private handleData(data: Buffer) {
+		this.buffer = Buffer.concat([this.buffer, data]);
 
-    while (true) {
-      const headerEnd = this.buffer.indexOf('\r\n\r\n');
-      if (headerEnd === -1) break;
+		while (true) {
+			const headerEnd = this.buffer.indexOf("\r\n\r\n");
+			if (headerEnd === -1) break;
 
-      const headerText = this.buffer.toString('ascii', 0, headerEnd);
-      const match = headerText.match(/Content-Length:\s*(\d+)/i);
-      
-      if (!match) {
-        console.error('LSP Error: No Content-Length header found. Dropping buffer.');
-        this.buffer = Buffer.alloc(0);
-        break;
-      }
+			const headerText = this.buffer.toString("ascii", 0, headerEnd);
+			const match = headerText.match(/Content-Length:\s*(\d+)/i);
 
-      const contentLength = parseInt(match[1], 10);
-      const totalLength = headerEnd + 4 + contentLength;
+			if (!match) {
+				console.error(
+					"LSP Error: No Content-Length header found. Dropping buffer.",
+				);
+				this.buffer = Buffer.alloc(0);
+				break;
+			}
 
-      if (this.buffer.length < totalLength) break;
+			const contentLength = parseInt(match[1], 10);
+			const totalLength = headerEnd + 4 + contentLength;
 
-      const messageBuffer = this.buffer.subarray(headerEnd + 4, totalLength);
-      this.buffer = this.buffer.subarray(totalLength);
+			if (this.buffer.length < totalLength) break;
 
-      try {
-        const message: LspMessage = JSON.parse(messageBuffer.toString('utf8'));
-        this.handleMessage(message);
-      } catch (err) {
-        console.error('Failed to parse LSP message:', err);
-      }
-    }
-  }
+			const messageBuffer = this.buffer.subarray(headerEnd + 4, totalLength);
+			this.buffer = this.buffer.subarray(totalLength);
 
-  private handleMessage(message: LspMessage) {
-    if (message.id !== undefined && this.pendingRequests.has(message.id)) {
-      const { resolve, reject } = this.pendingRequests.get(message.id)!;
-      this.pendingRequests.delete(message.id);
-      
-      if (message.error) {
-        reject(message.error);
-      } else {
-        resolve(message.result);
-      }
-    } else if (message.method) {
-      // It's a notification or request from the server
-      this.emit('notification', message);
-    }
-  }
+			try {
+				const message: LspMessage = JSON.parse(messageBuffer.toString("utf8"));
+				this.handleMessage(message);
+			} catch (err) {
+				console.error("Failed to parse LSP message:", err);
+			}
+		}
+	}
 
-  public sendRequest(method: string, params: any): Promise<any> {
-    return new Promise((resolve, reject) => {
-      if (!this.process || !this.process.stdin) {
-        return reject(new Error('LSP process not running'));
-      }
+	private handleMessage(message: LspMessage) {
+		if (message.id !== undefined && this.pendingRequests.has(message.id)) {
+			const { resolve, reject } = this.pendingRequests.get(message.id)!;
+			this.pendingRequests.delete(message.id);
 
-      const id = this.nextId++;
-      this.pendingRequests.set(id, { resolve, reject });
+			if (message.error) {
+				reject(message.error);
+			} else {
+				resolve(message.result);
+			}
+		} else if (message.method) {
+			// It's a notification or request from the server
+			this.emit("notification", message);
+		}
+	}
 
-      const request: LspMessage = {
-        jsonrpc: '2.0',
-        id,
-        method,
-        params,
-      };
+	public sendRequest(method: string, params: any): Promise<any> {
+		return new Promise((resolve, reject) => {
+			if (!this.process?.stdin) {
+				return reject(new Error("LSP process not running"));
+			}
 
-      this.sendMessage(request);
-    });
-  }
+			const id = this.nextId++;
+			this.pendingRequests.set(id, { resolve, reject });
 
-  public sendNotification(method: string, params: any) {
-    if (!this.process || !this.process.stdin) return;
+			const request: LspMessage = {
+				jsonrpc: "2.0",
+				id,
+				method,
+				params,
+			};
 
-    const notification: LspMessage = {
-      jsonrpc: '2.0',
-      method,
-      params,
-    };
+			this.sendMessage(request);
+		});
+	}
 
-    this.sendMessage(notification);
-  }
+	public sendNotification(method: string, params: any) {
+		if (!this.process?.stdin) return;
 
-  private sendMessage(message: LspMessage) {
-    const json = JSON.stringify(message);
-    const payload = `Content-Length: ${Buffer.byteLength(json, 'utf8')}\r\n\r\n${json}`;
-    this.process!.stdin!.write(payload);
-  }
+		const notification: LspMessage = {
+			jsonrpc: "2.0",
+			method,
+			params,
+		};
+
+		this.sendMessage(notification);
+	}
+
+	private sendMessage(message: LspMessage) {
+		const json = JSON.stringify(message);
+		const payload = `Content-Length: ${Buffer.byteLength(json, "utf8")}\r\n\r\n${json}`;
+		this.process?.stdin?.write(payload);
+	}
 }

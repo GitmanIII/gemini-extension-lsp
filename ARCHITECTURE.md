@@ -62,4 +62,6 @@ To ensure the extension works "out of the box" in unconfigured projects, `getWor
 3.  Re-submits the request to the Language Server, resulting in accurate, project-wide symbol discovery without requiring manual configuration.
 
 ## Smart Workspace Indexing
-Tools that require a global understanding of the project (specifically `renameSymbol` and `findReferences`) utilize a `forceIndexWorkspace` helper. This ensures that even if the project lacks a proper configuration file, the Language Server is forced to index all relevant files in the workspace by "opening" them programmatically before the operation begins. This guarantees that cross-file refactoring and reference counting work reliably in any directory.
+Tools that require a global understanding of the project (specifically `renameSymbol` and `findReferences`) utilize a `forceIndexWorkspace` helper. This ensures that even if the project lacks a proper configuration file, the Language Server is forced to index all relevant files in the workspace by "opening" them programmatically before the operation begins. 
+
+To ensure reliability, this process includes a **Smart Sync Delay** (500ms) after files are opened. This gives Language Servers (like `vtsls` or `pyright`) enough time to parse the new files and establish cross-file relationships (like imports and exports) before the refactoring or reference search is executed. This guarantees that cross-file refactoring and reference counting work reliably in any directory.
