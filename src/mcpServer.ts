@@ -154,6 +154,33 @@ function compressHover(hover: any): string {
   return content.trim();
 }
 
+function applyLspEdits(text: string, edits: any[]): string {
+  const lineOffsets: number[] = [0];
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === '\n') lineOffsets.push(i + 1);
+  }
+
+  function getOffset(pos: { line: number, character: number }): number {
+    const lineOffset = lineOffsets[pos.line] ?? text.length;
+    return Math.min(lineOffset + pos.character, text.length);
+  }
+
+  // Sort edits in reverse order (bottom-up)
+  const sortedEdits = [...edits].sort((a, b) => {
+    const offsetA = getOffset(a.range.start);
+    const offsetB = getOffset(b.range.start);
+    return offsetB - offsetA;
+  });
+
+  let result = text;
+  for (const edit of sortedEdits) {
+    const start = getOffset(edit.range.start);
+    const end = getOffset(edit.range.end);
+    result = result.slice(0, start) + edit.newText + result.slice(end);
+  }
+  return result;
+}
+
 // --- MCP Server Setup ---
 const server = new McpServer({
   name: "gemini-extension-lsp",
@@ -322,6 +349,46 @@ server.tool(
       // Biome exits with an error code if it finds linting rules it cannot safely auto-fix
       return {
         content: [{ type: "text", text: `Biome found issues it could not auto-fix in ${filePath}:\n${err.stdout || err.message}` }]
+      };
+    }
+  }
+);
+
+// Tool 8: lsp_format
+server.tool(
+  "lsp_format",
+  "Format a file natively using its Language Server. Use this for C++, Go, Python, Rust, PHP, etc. (For JS/TS/CSS/JSON, use auto_fix instead).",
+  {
+    filePath: z.string().describe("The path to the source file")
+  },
+  async ({ filePath }) => {
+    try {
+      const client = await serverManager.getServerForFile(filePath);
+      const uri = await ensureFileOpen(client, filePath);
+      const text = fs.readFileSync(filePath, "utf-8");
+      
+      const edits = await client.sendRequest("textDocument/formatting", { 
+        textDocument: { uri }, 
+        options: { tabSize: 4, insertSpaces: true } 
+      });
+
+      if (!edits || edits.length === 0) {
+        return { content: [{ type: "text", text: "No formatting changes needed." }] };
+      }
+
+      const newText = applyLspEdits(text, edits);
+      fs.writeFileSync(filePath, newText, "utf-8");
+      
+      client.sendNotification("textDocument/didChange", { 
+        textDocument: { uri, version: Date.now() }, 
+        contentChanges: [{ text: newText }] 
+      });
+
+      return { content: [{ type: "text", text: "File successfully formatted by the Language Server." }] };
+    } catch (err: any) {
+      return {
+        content: [{ type: "text", text: `Error formatting file: ${err.message}` }],
+        isError: true
       };
     }
   }
